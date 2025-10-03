@@ -14,11 +14,11 @@ if st.button("Get Answer"):
     try:
         # Send request to FastAPI backend
         response = requests.post(
-            "http://localhost:8000/chat",
+            "http://fastapi:8000/chat",  # Use service name
             json={"text": query},
             headers={"Content-Type": "application/json"},
         )
-        response.raise_for_status()  # Raise error for bad status
+        response.raise_for_status()
         answer = response.json().get("response", "No response received")
         st.write(f"**Answer**: {answer}")
     except requests.RequestException as e:

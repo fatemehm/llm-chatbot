@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    container_name: fastapi
+    networks:
+      - chatbot-network
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    container_name: streamlit
+    depends_on:
+      - fastapi
+    networks:
+      - chatbot-network
+
+networks:
+  chatbot-network:
+    driver: bridge
