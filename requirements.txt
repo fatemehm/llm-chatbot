@@ -5,6 +5,8 @@ torch
 pytest
 flake8
 black
-streamlit  
-peft  
+streamlit
+peft
 httpx
+requests
+pytest-cov
