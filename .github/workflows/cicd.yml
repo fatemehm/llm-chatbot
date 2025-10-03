@@ -35,6 +35,7 @@ jobs:
         with:
           args: >
             -Dsonar.projectKey=llm-chatbot
+            -Dsonar.organization=fatemehm
             -Dsonar.python.version=3.10
             -Dsonar.sources=app
             -Dsonar.tests=tests
