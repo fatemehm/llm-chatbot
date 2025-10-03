@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+transformers
+torch
+pytest
+flake8
+black
+streamlit  
+peft  
+httpx
