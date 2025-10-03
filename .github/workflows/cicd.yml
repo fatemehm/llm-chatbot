@@ -34,7 +34,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
-            -Dsonar.projectKey=llm-chatbot
+            -Dsonar.projectKey=fatemehm_llm-chatbot
             -Dsonar.organization=fatemehm
             -Dsonar.python.version=3.10
             -Dsonar.sources=app
