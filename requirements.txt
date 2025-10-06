@@ -11,3 +11,4 @@ httpx
 requests
 pytest-cov
 networkx==3.4.2
+mlflow
