@@ -1,0 +1,5 @@
+outs:
+- md5: b24e7ed3f0e7610d49913dd41b175762
+  size: 528
+  hash: md5
+  path: tech_support_qa.json
