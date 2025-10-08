@@ -13,31 +13,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Required for SonarQube
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           pip install pytest-cov
-      
-      - name: Run Flake8
-        run: flake8 .
-        continue-on-error: true
-      
-      - name: Run Black
-        run: black --check .
-        continue-on-error: true
-      
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+      - name: Run tests
+        run: |
+         flake8 .
+         black --check .
+         pytest --cov=app --cov-report=xml
+
       - name: Run Pytest with coverage
         run: |
           pip install pytest-cov
           pytest --cov=app --cov-report=xml --cov-report=term
-      
+
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@v6
         env:
@@ -54,17 +54,17 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         env:
           DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKER_PASS: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-      
+
       - name: Build and push FastAPI image
         run: |
           docker buildx build \
@@ -74,7 +74,7 @@ jobs:
             --tag fatemehmsy179/llm-chatbot:${GITHUB_SHA::7} \
             --push \
             .
-      
+
       - name: Build and push Streamlit image
         run: |
           docker buildx build \
