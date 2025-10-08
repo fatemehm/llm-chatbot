@@ -19,4 +19,4 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
-        args: [--python-version>=3.10, --warn-return-any, --warn-unused-configs, --disallow-untyped-defs]
+        args: [--python-version=3.12, --warn-return-any, --warn-unused-configs, --disallow-untyped-defs]
