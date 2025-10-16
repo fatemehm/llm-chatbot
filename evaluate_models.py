@@ -5,7 +5,11 @@ import mlflow
 import numpy as np
 import torch
 from datasets import Dataset
-from sklearn.metrics import accuracy_score, classification_report, precision_recall_fscore_support
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    precision_recall_fscore_support,
+)
 from transformers import AutoTokenizer
 
 from app.model import ChatbotModel
