@@ -16,10 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY config/ ./config/
 COPY data/ ./data/
-COPY models/ ./models/
+
+# Create models directory (will be downloaded/mounted at runtime)
+RUN mkdir -p models
 
 # Create necessary directories
-RUN mkdir -p models mlruns mlartifacts
+RUN mkdir -p mlruns mlartifacts
 
 # Expose port
 EXPOSE 8000
