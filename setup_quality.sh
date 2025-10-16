@@ -26,13 +26,13 @@ echo ""
 echo "Setting up pre-commit hooks..."
 if [ -f .pre-commit-config.yaml ]; then
     pre-commit install
-    echo "✓ Pre-commit hooks installed"
+    echo "Pre-commit hooks installed"
 else
     echo ".pre-commit-config.yaml not found. Creating it..."
     cat > .pre-commit-config.yaml << 'EOL'
 repos:
   - repo: https://github.com/psf/black
-    rev: 24.3.0
+    rev: 24.4.2
     hooks:
       - id: black
 

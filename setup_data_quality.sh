@@ -5,7 +5,7 @@ echo "🔍 Setting up Data Quality & Validation..."
 echo ""
 
 # Create directories
-echo "📁 Creating directories..."
+echo "Creating directories..."
 mkdir -p data_validation/reports
 mkdir -p data_validation/feature_store
 
@@ -13,7 +13,7 @@ mkdir -p data_validation/feature_store
 touch data_validation/__init__.py
 
 echo ""
-echo "✅ Setup complete!"
+echo "Setup complete!"
 echo ""
 echo "Available commands:"
 echo "  make validate-data  - Validate data quality"

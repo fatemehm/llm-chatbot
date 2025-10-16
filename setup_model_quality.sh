@@ -1,17 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Setting up Model Quality & Monitoring..."
+echo "Setting up Model Quality & Monitoring..."
 echo ""
 
 # Create directories
-echo "📁 Creating directories..."
+echo "Creating directories..."
 mkdir -p monitoring
 mkdir -p explainability/plots
 mkdir -p ab_testing
 
 # Install additional dependencies
-echo "📦 Installing dependencies..."
+echo "Installing dependencies..."
 pip install -q shap lime rouge scipy alibi-detect
 
 # Create __init__.py files
@@ -20,7 +20,7 @@ touch explainability/__init__.py
 touch ab_testing/__init__.py
 
 echo ""
-echo "✅ Setup complete!"
+echo "Setup complete!"
 echo ""
 echo "Available commands:"
 echo "  make evaluate    - Evaluate model performance"
