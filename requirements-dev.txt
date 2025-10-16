@@ -12,4 +12,3 @@ types-requests
 types-PyYAML
 types-torch
 types-urllib3
-isort==5.13.2
