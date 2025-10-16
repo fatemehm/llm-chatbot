@@ -6,22 +6,21 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app/ ./app/
 COPY config/ ./config/
-COPY data/ ./data/
+COPY data/README.md ./data/
 
 # Create models directory (will be downloaded/mounted at runtime)
-RUN mkdir -p models
-
-# Create necessary directories
-RUN mkdir -p mlruns mlartifacts
+RUN mkdir -p models mlruns mlartifacts data
 
 # Expose port
 EXPOSE 8000

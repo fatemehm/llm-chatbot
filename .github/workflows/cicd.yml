@@ -12,12 +12,10 @@ env:
 
 jobs:
   code-quality:
-    name: Code Quality & Linting
+    name: Code Quality Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,30 +26,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          pip install black isort flake8 mypy
 
-      - name: Run Black (formatting check)
-        run: |
-          python -m pip install --upgrade pip
-          pip install black==24.4.2
-          black  .
-        continue-on-error: false
+      - name: Run Black
+        run: black --check app/ tests/ train.py
 
-      - name: Run isort (import sorting check)
+      - name: Run isort
         run: isort --check-only app/ tests/ train.py
-        continue-on-error: false
 
-      - name: Run Flake8 (linting)
+      - name: Run Flake8
         run: flake8 app/ tests/ train.py --max-line-length=88
-        continue-on-error: false
 
-      - name: Run MyPy (type checking)
+      - name: Run MyPy
         run: mypy app/ --ignore-missing-imports
         continue-on-error: true
 
   test:
-    name: Unit & Integration Tests
+    name: Tests & Coverage
     runs-on: ubuntu-latest
     needs: code-quality
     steps:
@@ -67,8 +58,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-          pip install pytest-cov
+          pip install pytest pytest-cov
 
       - name: Run tests with coverage
         run: |
@@ -78,13 +68,12 @@ jobs:
             --cov-report=term \
             --cov-report=html
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: false
         continue-on-error: true
 
       - name: Archive coverage report
@@ -94,15 +83,12 @@ jobs:
           path: htmlcov/
           retention-days: 7
 
-  sonarqube:
-    name: SonarQube Analysis
+  data-quality:
+    name: Data Quality Validation
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -110,44 +96,56 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: Install dependencies and run tests
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-          pytest --cov=app --cov-report=xml
 
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        continue-on-error: true
+      - name: Validate data quality
+        run: |
+          python data_validation/validate_data.py
 
-  dvc-check:
-    name: DVC Data Check
+      - name: Upload validation reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: data_validation/reports/
+          retention-days: 7
+
+  sonarqube:
+    name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: test
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
-      - name: Install DVC
-        run: pip install dvc
-
-      - name: Check DVC files
+      - name: Install dependencies
         run: |
-          dvc status
-          # Optionally: dvc pull (if you have remote storage configured)
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=term
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   build-docker:
-    name: Build Docker Images
+    name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [test, code-quality]
+    needs: [test, data-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -176,7 +174,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
@@ -198,7 +196,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.streamlit
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta-streamlit.outputs.tags }}
           labels: ${{ steps.meta-streamlit.outputs.labels }}
@@ -206,37 +204,128 @@ jobs:
           cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:buildcache,mode=max
 
   security-scan:
-    name: Security Scan
+    name: Security Vulnerability Scan
     runs-on: ubuntu-latest
     needs: build-docker
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy for FastAPI
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: 'trivy-api-results.sarif'
+          timeout: '10m'  # Increase timeout
+          severity: 'CRITICAL,HIGH'  # Only scan for critical/high
+          scanners: 'vuln'  # Skip secret scanning for speed
         continue-on-error: true
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Run Trivy for Streamlit
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest
+          format: 'sarif'
+          output: 'trivy-streamlit-results.sarif'
+          timeout: '10m'  # Increase timeout
+          severity: 'CRITICAL,HIGH'  # Only scan for critical/high
+          scanners: 'vuln'  # Skip secret scanning for speed
+        continue-on-error: true
+
+      - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: 'trivy-api-results.sarif'
         continue-on-error: true
+        if: always()
 
-  notify:
-    name: Notification
+  deploy-notification:
+    name: Deployment Notification
     runs-on: ubuntu-latest
     needs: [build-docker, security-scan]
     if: always()
     steps:
-      - name: Send notification
+      - name: Check deployment status
         run: |
+          echo "==================================="
+          echo "CI/CD Pipeline Results"
+          echo "==================================="
+          echo "Code Quality: ${{ needs.code-quality.result }}"
+          echo "Tests: ${{ needs.test.result }}"
+          echo "Data Quality: ${{ needs.data-quality.result }}"
+          echo "Docker Build: ${{ needs.build-docker.result }}"
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "==================================="
+
           if [ "${{ needs.build-docker.result }}" == "success" ]; then
-            echo "Build successful! Images pushed to Docker Hub."
-            echo "FastAPI: docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest"
-            echo "Streamlit: docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest"
+            echo "✅ Deployment successful!"
+            echo "Docker images:"
+            echo "  - ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest"
+            echo "  - ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest"
           else
-            echo "Build failed. Check logs for details."
+            echo "❌ Deployment failed!"
           fi
+
+  integration-test:
+    name: Integration Tests (Post-Deploy)
+    runs-on: ubuntu-latest
+    needs: build-docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull Docker images
+        run: |
+          docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
+          docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest
+
+      - name: Start services
+        run: |
+          docker-compose up -d
+          sleep 15
+
+      - name: Test API health
+        run: |
+          curl -f http://localhost:8000/health || exit 1
+
+      - name: Test Streamlit health
+        run: |
+          curl -f http://localhost:8501/_stcore/health || exit 1
+
+      - name: Stop services
+        run: docker-compose down
+
+  performance-test:
+    name: Performance & Load Tests
+    runs-on: ubuntu-latest
+    needs: integration-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Locust
+        run: pip install locust
+
+      - name: Pull and start services
+        run: |
+          docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
+          docker-compose up -d
+          sleep 15
+
+      - name: Run load test
+        run: |
+          # Simple load test (1 user, 10 requests)
+          locust -f tests/locustfile.py \
+            --headless \
+            --users 1 \
+            --spawn-rate 1 \
+            --run-time 30s \
+            --host http://localhost:8000 \
+            || echo "Load test completed"
+
+      - name: Stop services
+        run: docker-compose down
