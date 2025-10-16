@@ -12,6 +12,3 @@ types-PyYAML
 types-torch
 types-urllib3
 isort==5.13.2
-pre-commit==3.6.0
-pytest==8.1.1
-pytest-cov==4.1.0
