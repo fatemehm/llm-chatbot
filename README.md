@@ -294,7 +294,7 @@ MIT License - see LICENSE file
 
 ## 👥 Authors
 
-- Your Name - Initial work
+- Mahshid
 
 ## 🙏 Acknowledgments
 
