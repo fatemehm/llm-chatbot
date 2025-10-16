@@ -19,7 +19,7 @@ COPY data/ ./data/
 COPY models/ ./models/
 
 # Create necessary directories
-RUN mkdir -p mlruns mlartifacts
+RUN mkdir -p models mlruns mlartifacts
 
 # Expose port
 EXPOSE 8000
