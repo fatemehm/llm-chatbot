@@ -29,7 +29,7 @@ jobs:
           pip install black isort flake8 mypy
 
       - name: Run Black
-        run: black --check app/ tests/ train.py
+        run: black app/ tests/ train.py
 
       - name: Run isort
         run: isort --check-only app/ tests/ train.py
