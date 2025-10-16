@@ -231,9 +231,9 @@ jobs:
       - name: Send notification
         run: |
           if [ "${{ needs.build-docker.result }}" == "success" ]; then
-            echo "✅ Build successful! Images pushed to Docker Hub."
+            echo "Build successful! Images pushed to Docker Hub."
             echo "FastAPI: docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest"
             echo "Streamlit: docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest"
           else
-            echo "❌ Build failed. Check logs for details."
+            echo "Build failed. Check logs for details."
           fi

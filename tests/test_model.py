@@ -158,7 +158,9 @@ def test_model_init_gpt2(setup_model_mocks, mock_qa_data):
 
 def test_model_init_missing_dataset(setup_model_mocks):
     """Test model init with missing dataset"""
-    setup_model_mocks["mock_exists"].side_effect = lambda x: False if "tech_support" in x else True
+    setup_model_mocks["mock_exists"].side_effect = lambda x: (
+        False if "tech_support" in x else True
+    )
 
     with patch.dict(os.environ, {"MODEL_NAME": "google/flan-t5-small"}):
         model = ChatbotModel()
