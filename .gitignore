@@ -1,1 +1,86 @@
-data/tech_support_qa.json
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# ML Models (Large files - don't push to GitHub)
+models/*/
+*.pth
+*.ckpt
+*.h5
+*.pkl
+*.joblib
+
+# MLflow (Don't push experiment data)
+mlruns/
+mlartifacts/
+mlruns_backup/
+mlartifacts_backup/
+
+# Data files (Don't push large datasets)
+*.csv
+*.json.bak
+data/*.json
+!data/tech_support_qa.json.dvc
+
+# Monitoring logs
+monitoring/production_logs.json
+data_validation/reports/*.json
+data_validation/lineage.json
+data_validation/feature_store/*.json
+!data_validation/feature_store/.gitkeep
+
+# Explainability outputs
+explainability/plots/*.png
+explainability/plots/*.html
+!explainability/plots/.gitkeep
+
+# A/B Testing results
+ab_testing/results.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+prometheus-data/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# OS
+.DS_Store
+Thumbs.db

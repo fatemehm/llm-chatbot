@@ -1,25 +1,32 @@
-# app/streamlit_app.py
-import streamlit as st
+import os
+
 import requests
+import streamlit as st
 
-st.title("Tech Support Chatbot")
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
-# Input query
-query = st.text_input(
-    "Enter your tech support question:", "How to fix a blue screen error?"
+st.title("🤖 LLM Chatbot")
+
+model_name = st.selectbox(
+    "Select Model",
+    ["google/flan-t5-small", "bert-base-uncased", "distilgpt2"],
 )
 
-# Button to submit query
-if st.button("Get Answer"):
-    try:
-        # Send request to FastAPI backend
-        response = requests.post(
-            "http://fastapi:8000/chat",  # Use service name
-            json={"text": query},
-            headers={"Content-Type": "application/json"},
-        )
-        response.raise_for_status()
-        answer = response.json().get("response", "No response received")
-        st.write(f"**Answer**: {answer}")
-    except requests.RequestException as e:
-        st.error(f"Error: Could not connect to backend - {e}")
+user_input = st.text_input("Enter your question:")
+
+if st.button("Submit"):
+    if not user_input.strip():
+        st.warning("Please type a question!")
+    else:
+        try:
+            response = requests.post(
+                f"{API_URL}/chat",
+                json={"message": user_input, "model_name": model_name},
+                timeout=10,
+            )
+            if response.status_code == 200:
+                st.success(f"Response: {response.json().get('response')}")
+            else:
+                st.error(f"API error: {response.status_code}")
+        except Exception as e:
+            st.error(f"Could not reach API: {e}")

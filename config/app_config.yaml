@@ -1,0 +1,10 @@
+api:
+  title: "TechSupport AI Chatbot"
+  description: "LLM-powered technical support chatbot"
+  version: "0.1.0"
+  host: "0.0.0.0"
+  port: 8000
+
+model:
+  path: "models/flan-t5-chatbot"
+  device: "cpu"  # or "cuda" if GPU available

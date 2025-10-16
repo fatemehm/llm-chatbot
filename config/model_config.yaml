@@ -1,0 +1,9 @@
+model_name: "flan-t5-chatbot"
+base_model: "google/flan-t5-small"
+max_length: 128
+
+lora:
+  r: 8
+  lora_alpha: 16
+  target_modules: ["q", "v"]
+  lora_dropout: 0.1

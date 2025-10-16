@@ -1,23 +1,64 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
+env:
+  PYTHON_VERSION: '3.11'
+  DOCKER_REGISTRY: fatemehmsy179
+
 jobs:
-  test:
+  code-quality:
+    name: Code Quality & Linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required for SonarQube
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Black (formatting check)
+        run: black --check app/ tests/ train.py
+        continue-on-error: false
+
+      - name: Run isort (import sorting check)
+        run: isort --check-only app/ tests/ train.py
+        continue-on-error: false
+
+      - name: Run Flake8 (linting)
+        run: flake8 app/ tests/ train.py --max-line-length=88
+        continue-on-error: false
+
+      - name: Run MyPy (type checking)
+        run: mypy app/ --ignore-missing-imports
+        continue-on-error: true
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -25,32 +66,85 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           pip install pytest-cov
-      - name: Run pre-commit
-        run: pre-commit run --all-files
-      - name: Run tests
-        run: |
-         flake8 .
-         black --check .
-         pytest --cov=app --cov-report=xml
 
-      - name: Run Pytest with coverage
+      - name: Run tests with coverage
         run: |
-          pip install pytest-cov
-          pytest --cov=app --cov-report=xml --cov-report=term
+          pytest tests/ -v \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term \
+            --cov-report=html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+        continue-on-error: true
+
+      - name: Archive coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 7
+
+  sonarqube:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies and run tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pytest --cov=app --cov-report=xml
 
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@v6
+        uses: sonarsource/sonarqube-scan-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      - name: Set up DVC
-        run: |
-          pip install dvc
-          dvc pull
+        continue-on-error: true
 
-  build-and-push:
+  dvc-check:
+    name: DVC Data Check
     runs-on: ubuntu-latest
-    needs: test
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install DVC
+        run: pip install dvc
+
+      - name: Check DVC files
+        run: |
+          dvc status
+          # Optionally: dvc pull (if you have remote storage configured)
+
+  build-docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test, code-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -59,28 +153,87 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        env:
-          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKER_PASS: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata for FastAPI
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/llm-chatbot
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push FastAPI image
-        run: |
-          docker buildx build \
-            --platform linux/amd64 \
-            --file ./Dockerfile \
-            --tag fatemehmsy179/llm-chatbot:latest \
-            --tag fatemehmsy179/llm-chatbot:${GITHUB_SHA::7} \
-            --push \
-            .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot:buildcache,mode=max
+
+      - name: Extract metadata for Streamlit
+        id: meta-streamlit
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Streamlit image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.streamlit
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-streamlit.outputs.tags }}
+          labels: ${{ steps.meta-streamlit.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:buildcache,mode=max
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [build-docker, security-scan]
+    if: always()
+    steps:
+      - name: Send notification
         run: |
-          docker buildx build \
-            --platform linux/amd64 \
-            --file ./Dockerfile.streamlit \
-            --tag fatemehmsy179/llm-chatbot-streamlit:latest \
-            --tag fatemehmsy179/llm-chatbot-streamlit:${GITHUB_SHA::7} \
-            --push \
-            .
+          if [ "${{ needs.build-docker.result }}" == "success" ]; then
+            echo "✅ Build successful! Images pushed to Docker Hub."
+            echo "FastAPI: docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest"
+            echo "Streamlit: docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest"
+          else
+            echo "❌ Build failed. Check logs for details."
+          fi

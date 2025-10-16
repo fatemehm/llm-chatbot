@@ -1,0 +1,11 @@
+num_epochs: 3
+batch_size: 4
+learning_rate: 5.0e-05
+warmup_steps: 100
+save_strategy: "epoch"
+logging_steps: 10
+output_dir: "models/flan-t5-chatbot"
+
+mlflow:
+  experiment_name: "tech-support-chatbot"
+  tracking_uri: "file:./mlruns"
