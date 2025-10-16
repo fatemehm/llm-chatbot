@@ -175,7 +175,16 @@ class DataValidator:
         print("-" * 60)
 
         # Add labels based on keywords (same as training)
-        keywords = ["error", "slow", "crash", "bug", "issue", "problem", "not working", "fail"]
+        keywords = [
+            "error",
+            "slow",
+            "crash",
+            "bug",
+            "issue",
+            "problem",
+            "not working",
+            "fail",
+        ]
 
         technical_count = 0
         for item in data:
@@ -283,7 +292,11 @@ class DataLineageTracker:
         self._save_lineage()
 
     def track_transformation(
-        self, operation: str, input_records: int, output_records: int, details: Dict = None
+        self,
+        operation: str,
+        input_records: int,
+        output_records: int,
+        details: Dict = None,
     ):
         """Track data transformation"""
         event = {

@@ -47,7 +47,10 @@ def evaluate_classification_model(model, tokenizer, test_data):
     print("\nDetailed Report:")
     print(
         classification_report(
-            true_labels, predictions, target_names=["Non-technical", "Technical"], zero_division=0
+            true_labels,
+            predictions,
+            target_names=["Non-technical", "Technical"],
+            zero_division=0,
         )
     )
 
@@ -105,7 +108,16 @@ def main():
         data = json.load(f)
 
     # Add labels
-    keywords = ["error", "slow", "crash", "bug", "issue", "problem", "not working", "fail"]
+    keywords = [
+        "error",
+        "slow",
+        "crash",
+        "bug",
+        "issue",
+        "problem",
+        "not working",
+        "fail",
+    ]
     for d in data:
         d["label"] = 1 if any(kw in d["question"].lower() for kw in keywords) else 0
 

@@ -170,7 +170,7 @@ class ModelExplainer:
             results.append(
                 {
                     "text": text,
-                    "prediction": "Technical" if predicted_class == 1 else "Non-technical",
+                    "prediction": ("Technical" if predicted_class == 1 else "Non-technical"),
                     "technical_prob": pred_proba[1],
                     "non_technical_prob": pred_proba[0],
                 }

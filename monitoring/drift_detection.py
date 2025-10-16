@@ -23,7 +23,11 @@ class DriftDetector:
             return json.load(f)
 
     def log_prediction(
-        self, question: str, prediction: str, confidence: float = None, response_time: float = None
+        self,
+        question: str,
+        prediction: str,
+        confidence: float = None,
+        response_time: float = None,
     ):
         """Log production prediction for drift analysis"""
         self.production_data.append(
@@ -149,7 +153,9 @@ def integrate_monitoring():
             # Extract question and prediction from request/response
             # This is simplified - actual implementation would parse body
             drift_detector.log_prediction(
-                question="example", prediction="example response", response_time=process_time
+                question="example",
+                prediction="example response",
+                response_time=process_time,
             )
 
         return response
