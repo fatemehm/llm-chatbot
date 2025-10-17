@@ -321,6 +321,7 @@ jobs:
 
       - name: Stop services
         run: docker-compose down
+        if: always()
 
   performance-test:
     name: Performance & Load Tests
@@ -356,5 +357,4 @@ jobs:
             || echo "Load test completed"
 
       - name: Stop services
-        if: always()
         run: docker-compose down
