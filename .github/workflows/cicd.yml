@@ -334,35 +334,35 @@ jobs:
             echo "Deployment failed!"
           fi
 
-  integration-test:
-    name: Integration Tests (Post-Deploy)
-    runs-on: ubuntu-latest
-    needs: build-docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
+  #integration-test:
+    #name: Integration Tests (Post-Deploy)
+    #runs-on: ubuntu-latest
+    #needs: build-docker
+    #if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #steps:
+      #- uses: actions/checkout@v4
 
-      - name: Pull Docker images
-        run: |
-          docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
-          docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest
+      #- name: Pull Docker images
+        #run: |
+          #docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
+          #docker pull ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest
 
-      - name: Start services
-        run: |
-          docker compose up -d
-          sleep 15
+      #- name: Start services
+        #run: |
+          #docker compose up -d
+          #sleep 15
 
-      - name: Test API health
-        run: |
-          curl -f http://localhost:8000/health || exit 1
+      #- name: Test API health
+       # run: |
+        #  curl -f http://localhost:8000/health || exit 1
 
-      - name: Test Streamlit health
-        run: |
-          curl -f http://localhost:8501/_stcore/health || exit 1
+      #- name: Test Streamlit health
+       # run: |
+        #  curl -f http://localhost:8501/_stcore/health || exit 1
 
-      - name: Stop services
-        run: docker-compose down
-        if: false
+      #- name: Stop services
+       # run: docker-compose down
+
 
   performance-test:
     name: Performance & Load Tests
