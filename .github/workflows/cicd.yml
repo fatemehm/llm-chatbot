@@ -12,10 +12,12 @@ env:
 
 jobs:
   code-quality:
-    name: Code Quality Checks
+    name: Code Quality & Linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,18 +28,25 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install black isort flake8 mypy
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      - name: Run Black
-        run: black app/ tests/ train.py
+      - name: Run Black (formatting check)
+        run: |
+          python -m pip install --upgrade pip
+          pip install black==24.4.2
+          black  .
+        continue-on-error: false
 
-      - name: Run isort
+      - name: Run isort (import sorting check)
         run: isort --check-only app/ tests/ train.py
+        continue-on-error: false
 
-      - name: Run Flake8
+      - name: Run Flake8 (linting)
         run: flake8 app/ tests/ train.py --max-line-length=88
+        continue-on-error: false
 
-      - name: Run MyPy
+      - name: Run MyPy (type checking)
         run: mypy app/ --ignore-missing-imports
         continue-on-error: true
 
@@ -82,7 +91,6 @@ jobs:
           name: coverage-report
           path: htmlcov/
           retention-days: 7
-
   data-quality:
     name: Data Quality Validation
     runs-on: ubuntu-latest
@@ -142,6 +150,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+
+  dvc-check:
+    name: DVC Data Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install DVC
+        run: pip install dvc
+
+      - name: Check DVC files
+        run: |
+          dvc status
+          # Optionally: dvc pull (if you have remote storage configured)
   build-docker:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
