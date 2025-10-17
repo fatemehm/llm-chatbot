@@ -240,13 +240,14 @@ jobs:
       security-events: write  # Required for SARIF upload
       contents: read         # Required for checkout
       actions: read          # Required for accessing artifacts/caches
-    env:
-      date: ${{ github.event.repository.pushed_at || formatDate('now', 'YYYY-MM-DD') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch full history for git metadata
+      - name: Set date for cache
+        id: date
+        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
       - name: Setup Trivy
         uses: aquasecurity/setup-trivy@e6c2c5e321ed9123bda567646e2f96565e34abe1
