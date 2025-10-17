@@ -362,7 +362,7 @@ jobs:
 
       - name: Stop services
         run: docker-compose down
-        if: always()
+        if: false
 
   performance-test:
     name: Performance & Load Tests
