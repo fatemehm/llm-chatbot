@@ -230,6 +230,7 @@ jobs:
           labels: ${{ steps.meta-streamlit.outputs.labels }}
           cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:buildcache
           cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:buildcache,mode=max
+
   security-scan:
     name: Security Vulnerability Scan
     runs-on: ubuntu-latest
@@ -239,6 +240,8 @@ jobs:
       security-events: write  # Required for SARIF upload
       contents: read         # Required for checkout
       actions: read          # Required for accessing artifacts/caches
+    env:
+      date: ${{ github.event.repository.pushed_at || formatDate('now', 'YYYY-MM-DD') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -264,7 +267,7 @@ jobs:
         continue-on-error: true
 
       - name: Run Trivy for FastAPI
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest
           format: 'sarif'
@@ -272,11 +275,11 @@ jobs:
           timeout: '10m'
           severity: 'CRITICAL,HIGH'
           scanners: 'vuln'
-          skip-version-check: true  # Suppress version check warning
+          skip-update-check: true  # Suppress version check warning
         continue-on-error: true
 
       - name: Run Trivy for Streamlit
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest
           format: 'sarif'
@@ -284,13 +287,14 @@ jobs:
           timeout: '10m'
           severity: 'CRITICAL,HIGH'
           scanners: 'vuln'
-          skip-version-check: true  # Suppress version check warning
+          skip-update-check: true  # Suppress version check warning
         continue-on-error: true
 
       - name: Upload Trivy results (FastAPI)
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-api-results.sarif'
+          category: 'trivy-fastapi'
         if: always()
         continue-on-error: true
 
@@ -298,6 +302,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-streamlit-results.sarif'
+          category: 'trivy-streamlit'
         if: always()
         continue-on-error: true
 
@@ -343,7 +348,7 @@ jobs:
 
       - name: Start services
         run: |
-          docker-compose up -d
+          docker compose up -d
           sleep 15
 
       - name: Test API health
