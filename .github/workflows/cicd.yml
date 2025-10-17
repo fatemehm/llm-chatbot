@@ -285,12 +285,12 @@ jobs:
           echo "==================================="
 
           if [ "${{ needs.build-docker.result }}" == "success" ]; then
-            echo "✅ Deployment successful!"
+            echo "Deployment successful!"
             echo "Docker images:"
             echo "  - ${{ env.DOCKER_REGISTRY }}/llm-chatbot:latest"
             echo "  - ${{ env.DOCKER_REGISTRY }}/llm-chatbot-streamlit:latest"
           else
-            echo "❌ Deployment failed!"
+            echo "Deployment failed!"
           fi
 
   integration-test:
@@ -356,4 +356,5 @@ jobs:
             || echo "Load test completed"
 
       - name: Stop services
+        if: always()
         run: docker-compose down
