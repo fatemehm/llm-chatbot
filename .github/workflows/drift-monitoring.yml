@@ -1,0 +1,382 @@
+name: 🔍 Model Drift Monitoring
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"   # Every Monday at 2 AM UTC
+  workflow_dispatch:       # Allow manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'data/**'
+      - 'models/**'
+      - 'monitoring/**'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  drift-detection:
+    name: Check Data & Model Drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install evidently==0.4.25 plotly scipy
+
+      - name: Setup DVC (if using remote storage)
+        run: |
+          pip install dvc
+          # dvc pull data/  # Uncomment if you have DVC remote configured
+        continue-on-error: true
+
+      - name: Run Drift Detection
+        id: drift_check
+        continue-on-error: true
+        run: |
+          python monitoring/drift_detection.py --mode evidently
+          echo "drift_status=$?" >> $GITHUB_OUTPUT
+
+      - name: Upload Drift Report (HTML)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: drift-report-${{ github.run_number }}
+          path: monitoring/reports/drift_report.html
+          retention-days: 30
+
+      - name: Upload Drift Metrics (JSON)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: drift-metrics-${{ github.run_number }}
+          path: monitoring/reports/drift_metrics.json
+          retention-days: 90
+
+      - name: Upload Production Logs Analysis
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-analysis-${{ github.run_number }}
+          path: monitoring/production_logs_analysis.json
+          retention-days: 30
+        continue-on-error: true
+
+      - name: Create Issue if Drift Detected
+        if: steps.drift_check.outputs.drift_status != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let driftMetrics = {};
+            try {
+              driftMetrics = JSON.parse(fs.readFileSync('monitoring/reports/drift_metrics.json', 'utf8'));
+            } catch (e) {
+              console.log('Could not read drift metrics');
+            }
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Model Drift Detected - ' + new Date().toISOString().split('T')[0],
+              body: `## Drift Detection Alert
+
+              Data or model drift has been detected in the LLM chatbot.
+
+              **Run Details:**
+              - Workflow Run: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              - Date: ${new Date().toISOString()}
+              - Branch: ${{ github.ref_name }}
+              - Commit: ${{ github.sha }}
+
+              **Drift Metrics:**
+              \`\`\`json
+              ${JSON.stringify(driftMetrics, null, 2)}
+              \`\`\`
+
+              **Action Required:**
+              1. Review the drift report in workflow artifacts
+              2. Check \`monitoring/production_logs.json\` for recent predictions
+              3. Compare with baseline in \`data/reference/\`
+              4. Consider retraining: \`python train.py\`
+              5. Update monitoring thresholds if needed
+
+              **Quick Commands:**
+              \`\`\`bash
+              # View drift report locally
+              python monitoring/drift_detection.py --mode evidently
+
+              # Retrain model
+              python train.py
+
+              # Evaluate models
+              python evaluate_models.py
+              \`\`\`
+
+              **Related Files:**
+              - Production logs: \`monitoring/production_logs.json\`
+              - Drift detection: \`monitoring/drift_detection.py\`
+              - Training config: \`config/training_config.yaml\`
+              `,
+              labels: ['drift-alert', 'monitoring', 'ml-ops', 'needs-review']
+            });
+
+            console.log(\`Created issue #\${issue.data.number}\`);
+
+      - name: Send Email Notification
+        if: steps.drift_check.outputs.drift_status != '0'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASS }}
+          subject: " Drift Detected in LLM Chatbot - Run #${{ github.run_number }}"
+          to: ${{ secrets.ALERT_EMAIL }}
+          from: "ML Pipeline <${{ secrets.EMAIL_USER }}>"
+          body: |
+            Drift has been detected in the LLM Chatbot model.
+
+            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Date: ${{ github.event.head_commit.timestamp }}
+            Branch: ${{ github.ref_name }}
+
+            Review the drift report in the workflow artifacts.
+            Check monitoring/production_logs.json for details.
+            Consider retraining the model if drift is significant.
+
+            Quick actions:
+            - View GitHub issue created for this alert
+            - Download drift report from workflow artifacts
+            - Run: python train.py (to retrain)
+          priority: high
+        continue-on-error: true
+
+      - name: Post to Slack (Optional)
+        if: steps.drift_check.outputs.drift_status != '0' && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Model Drift Detected in LLM Chatbot",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Model Drift Alert"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|#${{ github.run_number }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n${{ github.sha }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Drift detected in production model. Review the artifacts and consider retraining.\n\n*Actions:*\n• Check `monitoring/production_logs.json`\n• Run `python train.py` to retrain\n• Update baseline if needed"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow Run"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true
+
+      - name: Update MLflow Metrics
+        if: always()
+        run: |
+          python -c "
+          import json
+          import mlflow
+          from pathlib import Path
+
+          # Load drift metrics
+          metrics_file = Path('monitoring/reports/drift_metrics.json')
+          if metrics_file.exists():
+              with open(metrics_file) as f:
+                  metrics = json.load(f)
+
+              # Log to MLflow
+              mlflow.set_tracking_uri('file:./mlruns')
+              mlflow.set_experiment('drift_monitoring')
+
+              with mlflow.start_run(run_name='drift_check_${{ github.run_number }}'):
+                  mlflow.log_param('workflow_run', '${{ github.run_number }}')
+                  mlflow.log_param('git_sha', '${{ github.sha }}')
+                  mlflow.log_metric('drift_detected', int(metrics.get('dataset_drift_detected', False)))
+                  mlflow.log_metric('drift_share', metrics.get('drift_share', 0))
+                  mlflow.log_metric('num_drifted_features', metrics.get('number_of_drifted_columns', 0))
+
+                  # Log artifact
+                  if Path('monitoring/reports/drift_report.html').exists():
+                      mlflow.log_artifact('monitoring/reports/drift_report.html')
+          "
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🔍 Drift Monitoring Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.drift_check.outputs.drift_status }}" != "0" ]; then
+            echo " **Drift Detected!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Action Items:" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Review drift report artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Check \`monitoring/production_logs.json\`" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Investigate data distribution changes" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Run: \`python train.py\` to retrain model" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Run: \`python evaluate_models.py\` to compare" >> $GITHUB_STEP_SUMMARY
+          else
+            echo " **No Significant Drift Detected**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Model is performing within expected parameters." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Detailed Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Production Logs](monitoring/production_logs.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Training Script](train.py)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Training Config](config/training_config.yaml)" >> $GITHUB_STEP_SUMMARY
+
+  model-performance-check:
+    name: Check Model Performance Degradation
+    runs-on: ubuntu-latest
+    needs: drift-detection
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Analyze Production Performance
+        run: |
+          python -c "
+          import json
+          from pathlib import Path
+          from datetime import datetime, timedelta
+
+          logs_file = Path('monitoring/production_logs.json')
+
+          if logs_file.exists():
+              with open(logs_file) as f:
+                  logs = json.load(f)
+
+              # Analyze recent performance
+              recent = [log for log in logs if 'timestamp' in log]
+
+              if recent:
+                  avg_response_time = sum(log.get('response_time', 0) for log in recent) / len(recent)
+                  avg_confidence = sum(log.get('confidence', 0) for log in recent) / len(recent)
+
+                  print(f'Production Metrics (last {len(recent)} predictions):')
+                  print(f'   Average Response Time: {avg_response_time:.3f}s')
+                  print(f'   Average Confidence: {avg_confidence:.3f}')
+
+                  # Check for performance degradation
+                  if avg_response_time > 5.0:
+                      print('WARNING: Response time is high!')
+                  if avg_confidence < 0.5:
+                      print('WARNING: Model confidence is low!')
+              else:
+                  print('ℹNo recent production logs found')
+          else:
+              print('ℹNo production logs file found')
+          "
+
+  retrain-recommendation:
+    name: Model Retraining Recommendation
+    runs-on: ubuntu-latest
+    needs: [drift-detection, model-performance-check]
+    if: failure()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Analyze and Recommend
+        run: |
+          echo "##Model Retraining Recommendation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Based on the detected drift, we recommend retraining the model." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Retraining Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Review Configuration**:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   cat config/training_config.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Start Training**:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   python train.py" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Evaluate Models**:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   python evaluate_models.py" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "4. **Update Baseline**:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   # Save new baseline after retraining" >> $GITHUB_STEP_SUMMARY
+          echo "   python monitoring/drift_detection.py --update-baseline" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "5. **Check Explainability**:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   python explainability/explain_model.py" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY

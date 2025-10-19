@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-10-18T20:59:42.459849",
+  "dataset_drift_detected": true,
+  "drifted_features": [],
+  "drift_share": 0.8,
+  "number_of_drifted_columns": 4
+}

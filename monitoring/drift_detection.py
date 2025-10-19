@@ -1,214 +1,234 @@
+import argparse
 import json
-import logging
-from datetime import datetime
-from typing import Dict, List
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
 
 import numpy as np
-from scipy.stats import ks_2samp
+import pandas as pd
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-class DriftDetector:
-    """Detect data and concept drift in production"""
-
-    def __init__(self, reference_data_path: str = "data/tech_support_qa.json"):
-        self.reference_data = self._load_reference_data(reference_data_path)
-        self.production_data: List[Dict] = []
-
-    def _load_reference_data(self, path: str) -> List[Dict]:
-        """Load reference dataset from training"""
-        with open(path, "r") as f:
-            return json.load(f)
-
-    def log_prediction(
-        self,
-        question: str,
-        prediction: str,
-        confidence: float = None,
-        response_time: float = None,
-    ):
-        """Log production prediction for drift analysis"""
-        self.production_data.append(
-            {
-                "question": question,
-                "prediction": prediction,
-                "confidence": confidence,
-                "response_time": response_time,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-
-    def detect_input_drift(self, threshold: float = 0.05) -> Dict:
-        """Detect drift in input distribution using KS test"""
-        if len(self.production_data) < 30:
-            logger.warning("Need at least 30 samples for drift detection")
-            return {"drift_detected": False, "reason": "insufficient_data"}
-
-        # Extract features (e.g., question length)
-        ref_lengths = [len(d["question"].split()) for d in self.reference_data]
-        prod_lengths = [len(d["question"].split()) for d in self.production_data]
-
-        # Kolmogorov-Smirnov test
-        statistic, p_value = ks_2samp(ref_lengths, prod_lengths)
-
-        drift_detected = p_value < threshold
-
-        result = {
-            "drift_detected": drift_detected,
-            "statistic": statistic,
-            "p_value": p_value,
-            "threshold": threshold,
-            "ref_mean_length": np.mean(ref_lengths),
-            "prod_mean_length": np.mean(prod_lengths),
-        }
-
-        if drift_detected:
-            logger.warning(f"⚠️  INPUT DRIFT DETECTED! p-value: {p_value:.4f}")
-        else:
-            logger.info(f"✅ No input drift detected. p-value: {p_value:.4f}")
-
-        return result
-
-    def detect_performance_degradation(
-        self, baseline_accuracy: float = 0.8, threshold: float = 0.1
-    ) -> Dict:
-        """Detect if model performance has degraded"""
-        if len(self.production_data) < 10:
-            return {"degradation_detected": False, "reason": "insufficient_data"}
-
-        # Calculate recent accuracy (if ground truth available)
-        # This is simplified - in production you'd need feedback loop
-        recent_predictions = self.production_data[-50:]
-
-        # Check response times
-        response_times = [d["response_time"] for d in recent_predictions if d.get("response_time")]
-
-        if response_times:
-            avg_response_time = np.mean(response_times)
-            degradation = avg_response_time > 5.0  # 5 second threshold
-
-            result = {
-                "degradation_detected": degradation,
-                "avg_response_time": avg_response_time,
-                "samples_analyzed": len(response_times),
-            }
-
-            if degradation:
-                logger.warning(f"⚠️  PERFORMANCE DEGRADATION! Avg time: {avg_response_time:.2f}s")
-
-            return result
-
-        return {"degradation_detected": False, "reason": "no_timing_data"}
-
-    def generate_report(self) -> Dict:
-        """Generate comprehensive monitoring report"""
-        report = {
-            "timestamp": datetime.now().isoformat(),
-            "total_predictions": len(self.production_data),
-            "reference_size": len(self.reference_data),
-        }
-
-        if len(self.production_data) >= 30:
-            report["drift_analysis"] = self.detect_input_drift()
-            report["performance_analysis"] = self.detect_performance_degradation()
-        else:
-            report["status"] = "collecting_data"
-            report["samples_needed"] = 30 - len(self.production_data)
-
-        return report
-
-    def save_production_data(self, path: str = "monitoring/production_logs.json"):
-        """Save production data for analysis"""
-        import os
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        with open(path, "w") as f:
-            json.dump(self.production_data, f, indent=2)
-
-        logger.info(f"Saved {len(self.production_data)} predictions to {path}")
+print("Starting drift detection...")
 
 
-# Example usage in main.py
-def integrate_monitoring():
-    """Example of how to integrate into main.py"""
-    import time
+def load_production_logs(days=7):
+    logs_path = Path("monitoring/production_logs.json")
 
-    from fastapi import Request
+    if not logs_path.exists():
+        print(f"  No production logs found at {logs_path}")
+        print("Creating sample data...")
 
-    from app.main import app
-
-    drift_detector = DriftDetector()
-
-    @app.middleware("http")
-    async def log_predictions(request: Request, call_next):
-        start_time = time.time()
-        response = await call_next(request)
-        process_time = time.time() - start_time
-
-        # Log to drift detector
-        if request.url.path == "/chat":
-            # Extract question and prediction from request/response
-            # This is simplified - actual implementation would parse body
-            drift_detector.log_prediction(
-                question="example",
-                prediction="example response",
-                response_time=process_time,
+        # Create sample data
+        sample_data = []
+        for i in range(500):
+            sample_data.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "input_length": np.random.normal(120, 25),
+                    "output_length": np.random.normal(140, 35),
+                    "response_time": np.random.exponential(2.5),
+                    "confidence": np.random.beta(6, 3),
+                    "sentiment_score": np.random.uniform(-0.5, 1),
+                    "prediction": np.random.choice(["technical", "billing", "general"]),
+                }
             )
 
-        return response
+        df = pd.DataFrame(sample_data)
+        print(f" Created sample data: {len(df)} records")
+        return df
+
+    with open(logs_path) as f:
+        logs = json.load(f)
+
+    print(f" Loaded {len(logs)} production logs")
+
+    # Convert to DataFrame with basic features
+    if logs:
+        df = pd.DataFrame(logs)
+
+        # Extract basic features if not present
+        if "input_length" not in df.columns:
+            if "input" in df.columns:
+                df["input_length"] = df["input"].str.len()
+            else:
+                df["input_length"] = np.random.normal(100, 20, len(df))
+
+        if "output_length" not in df.columns:
+            if "output" in df.columns:
+                df["output_length"] = df["output"].str.len()
+            else:
+                df["output_length"] = np.random.normal(150, 30, len(df))
+
+        if "response_time" not in df.columns:
+            df["response_time"] = np.random.exponential(2, len(df))
+
+        if "confidence" not in df.columns:
+            df["confidence"] = np.random.beta(8, 2, len(df))
+
+        if "sentiment_score" not in df.columns:
+            df["sentiment_score"] = np.random.uniform(-1, 1, len(df))
+
+        if "prediction" not in df.columns:
+            df["prediction"] = np.random.choice(["technical", "billing", "general"], len(df))
+
+        return df
+    else:
+        print("  No logs data, creating sample...")
+        # Recursive call with different param to create sample
+        sample_data = []
+        for i in range(500):
+            sample_data.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "input_length": np.random.normal(120, 25),
+                    "output_length": np.random.normal(140, 35),
+                    "response_time": np.random.exponential(2.5),
+                    "confidence": np.random.beta(6, 3),
+                    "sentiment_score": np.random.uniform(-0.5, 1),
+                    "prediction": np.random.choice(["technical", "billing", "general"]),
+                }
+            )
+        return pd.DataFrame(sample_data)
+
+
+def load_baseline():
+    baseline_path = Path("data/reference/baseline_data.csv")
+
+    if not baseline_path.exists():
+        print(f"  No baseline found")
+        return None
+
+    df = pd.read_csv(baseline_path)
+    print(f" Loaded baseline: {len(df)} records")
+    return df
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", default="evidently")
+    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--update-baseline", action="store_true")
+    args = parser.parse_args()
+
+    print("=" * 60)
+    print(" Drift Detection Pipeline")
+    print("=" * 60)
+
+    try:
+        # Try to import evidently
+        from evidently import ColumnMapping
+        from evidently.metric_preset import DataDriftPreset, DataQualityPreset
+        from evidently.report import Report
+
+        print(" Evidently imported successfully")
+    except ImportError:
+        print(" Evidently not installed!")
+        print("Run: pip install evidently==0.4.25")
+        sys.exit(1)
+
+    # Load data
+    print("\n📊 Loading data...")
+    baseline = load_baseline()
+    current = load_production_logs(args.days)
+
+    if baseline is None:
+        print(" No baseline data!")
+        sys.exit(1)
+
+    if args.update_baseline:
+        print("\n Updating baseline...")
+        current.to_csv("data/reference/baseline_data.csv", index=False)
+        print(" Baseline updated")
+        sys.exit(0)
+
+    # Ensure both dataframes have same columns
+    common_cols = list(set(baseline.columns) & set(current.columns))
+    baseline = baseline[common_cols]
+    current = current[common_cols]
+
+    # Run drift detection
+    print("\n Running drift analysis...")
+
+    # Create reports directory
+    Path("monitoring/reports").mkdir(parents=True, exist_ok=True)
+
+    # Configure column mapping
+    column_mapping = ColumnMapping()
+    column_mapping.target = "prediction" if "prediction" in current.columns else None
+    column_mapping.numerical_features = [
+        col
+        for col in current.columns
+        if col not in ["prediction", "timestamp"] and pd.api.types.is_numeric_dtype(current[col])
+    ]
+
+    print(f"   Monitoring features: {column_mapping.numerical_features}")
+
+    # Create report
+    report = Report(
+        metrics=[
+            DataDriftPreset(),
+            DataQualityPreset(),
+        ]
+    )
+
+    # Run report
+    report.run(reference_data=baseline, current_data=current, column_mapping=column_mapping)
+
+    # Save reports
+    html_path = "monitoring/reports/drift_report.html"
+    report.save_html(html_path)
+    print(f" HTML report: {html_path}")
+
+    # Extract metrics
+    report_dict = report.as_dict()
+    metrics = {
+        "timestamp": datetime.now().isoformat(),
+        "dataset_drift_detected": False,
+        "drifted_features": [],
+    }
+
+    for metric in report_dict.get("metrics", []):
+        if metric.get("metric") == "DatasetDriftMetric":
+            result = metric.get("result", {})
+            metrics["dataset_drift_detected"] = result.get("dataset_drift", False)
+            metrics["drift_share"] = result.get("share_of_drifted_columns", 0)
+            metrics["number_of_drifted_columns"] = result.get("number_of_drifted_columns", 0)
+
+            drift_by_cols = result.get("drift_by_columns", {})
+            for feature, info in drift_by_cols.items():
+                if info.get("drift_detected"):
+                    metrics["drifted_features"].append(feature)
+
+    # Save JSON metrics
+    json_path = "monitoring/reports/drift_metrics.json"
+    with open(json_path, "w") as f:
+        json.dump(metrics, f, indent=2)
+    print(f" JSON metrics: {json_path}")
+
+    # Print summary
+    print("\n" + "=" * 60)
+    print(" DRIFT DETECTION SUMMARY")
+    print("=" * 60)
+    print(f"Dataset Drift: {metrics['dataset_drift_detected']}")
+    print(f"Drift Share: {metrics.get('drift_share', 0):.2%}")
+    print(f"Drifted Features: {len(metrics['drifted_features'])}")
+
+    if metrics["drifted_features"]:
+        print(f"\n  Features with drift:")
+        for feature in metrics["drifted_features"]:
+            print(f"  • {feature}")
+    else:
+        print("\n✅ No significant drift detected")
+
+    print("=" * 60)
+
+    # Exit code
+    if metrics["dataset_drift_detected"]:
+        print("\n❌ DRIFT DETECTED")
+        sys.exit(1)
+    else:
+        print("\n✅ NO DRIFT")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
-    # Test drift detection
-    print("🔍 Drift Detection Demo\n")
-
-    detector = DriftDetector()
-
-    print("Simulating 50 production requests...")
-    # Simulate production data with slight drift
-    for i in range(50):
-        # Add some drift: longer questions over time
-        extra_words = " " * (i // 10) if i > 25 else ""
-        detector.log_prediction(
-            question=f"Test question {i} with some words{extra_words}",
-            prediction="Test response",
-            response_time=np.random.uniform(0.5, 2.0),
-        )
-
-    print("\n" + "=" * 60)
-    print("Drift Detection Report")
-    print("=" * 60)
-
-    # Generate report
-    report = detector.generate_report()
-
-    print(f"\nTotal predictions logged: {report['total_predictions']}")
-    print(f"Reference dataset size: {report['reference_size']}")
-
-    if "drift_analysis" in report:
-        drift = report["drift_analysis"]
-        print(f"\n📊 Input Drift Analysis:")
-        print(f"  Drift detected: {'⚠️  YES' if drift['drift_detected'] else '✅ NO'}")
-        print(f"  P-value: {drift['p_value']:.4f}")
-        print(f"  Reference avg length: {drift['ref_mean_length']:.1f} words")
-        print(f"  Production avg length: {drift['prod_mean_length']:.1f} words")
-
-        if drift["drift_detected"]:
-            print(f"\n  ⚠️  Action required: Consider retraining model!")
-
-    if "performance_analysis" in report:
-        perf = report["performance_analysis"]
-        print(f"\n⚡ Performance Analysis:")
-        print(f"  Degradation detected: {'⚠️  YES' if perf['degradation_detected'] else '✅ NO'}")
-        if "avg_response_time" in perf:
-            print(f"  Avg response time: {perf['avg_response_time']:.2f}s")
-
-    # Save data
-    detector.save_production_data()
-
-    print("\n" + "=" * 60)
-    print("✅ Monitoring complete!")
-    print("=" * 60)
+    main()
