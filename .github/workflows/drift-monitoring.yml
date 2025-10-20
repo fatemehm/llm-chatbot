@@ -164,7 +164,7 @@ jobs:
 
       - name: Install Hugging Face CLI
         run: |
-          python pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install huggingface_hub
 
       - name: Configure Git
