@@ -162,20 +162,35 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Authenticate to Hugging Face
+      - name: Install Hugging Face CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install huggingface_hub
+
+      - name: Log in to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: huggingface-cli login --token $HF_TOKEN
+
+      - name: Create Space if it doesn't exist
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git config --global user.email "hf-actions@users.noreply.github.com"
-          git config --global user.name "HF Actions Bot"
-          echo "https://huggingface:${HF_TOKEN}@huggingface.co" > ~/.git-credentials
+          set -e
+          SPACE="Mahshidmsy/llm-chatbot"
+          if ! huggingface-cli repo list | grep -q "$SPACE"; then
+            echo "Creating Space $SPACE..."
+            huggingface-cli repo create $SPACE --type space --space-sdk docker --private False
+          else
+            echo "Space $SPACE already exists."
+          fi
 
       - name: Clone Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE: ${{ secrets.HF_SPACE }}
         run: |
-          git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE} space_repo
+          git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/Mahshidmsy/llm-chatbot space_repo
           cd space_repo
           # Copy app and Dockerfile
           cp -r ../app ./app
@@ -188,7 +203,7 @@ jobs:
         run: |
           echo "## ✅ Hugging Face Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "Model successfully deployed to:" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 https://huggingface.co/spaces/${{ secrets.HF_SPACE }}" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 https://huggingface.co/spaces/Mahshidmsy/llm-chatbot" >> $GITHUB_STEP_SUMMARY
 
   notify:
     name: Notify via Email
