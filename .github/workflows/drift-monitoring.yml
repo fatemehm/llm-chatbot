@@ -178,12 +178,9 @@ jobs:
         run: |
           set -e
           SPACE="Mahshidmsy/llm-chatbot"
-          if ! huggingface-cli repo list | grep -q "$SPACE"; then
-            echo "Creating Space $SPACE..."
-            huggingface-cli repo create $SPACE --type space --space-sdk docker --private False
-          else
-            echo "Space $SPACE already exists."
-          fi
+          echo "Creating Space $SPACE..."
+          huggingface-cli repo create $SPACE --type space --sdk docker || echo "Space already exists."
+
 
       - name: Clone Hugging Face Space
         env:
