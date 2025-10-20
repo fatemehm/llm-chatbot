@@ -185,9 +185,9 @@ jobs:
           HF_SPACE: ${{ secrets.HF_SPACE }}
         run: |
           # Create the Space if it doesn't exist
-          huggingface-cli repo create $HF_SPACE --type space --sdk docker --private False || true
+          hf repo create $HF_SPACE --type space --space-sdk docker --private False || true
           # Push docker image to Space
-          huggingface-cli space push-docker $HF_SPACE .
+          hf space push-docker $HF_SPACE .
 
       - name: Deployment Summary
         run: |
