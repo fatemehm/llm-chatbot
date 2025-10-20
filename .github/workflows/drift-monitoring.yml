@@ -184,7 +184,7 @@ jobs:
           set -e
           SPACE="Mahshidmsy/llm-chatbot"
           echo "Creating Space $SPACE..."
-          huggingface-cli repo create $SPACE --type space --sdk docker || echo "Space already exists."
+          huggingface-cli repo create $SPACE --type space || echo "Space already exists."
 
 
       - name: Clone Hugging Face Space
@@ -192,7 +192,8 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE: ${{ secrets.HF_SPACE }}
         run: |
-          git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/Mahshidmsy/llm-chatbot space_repo
+          HF_SPACE="Mahshidmsy/llm-chatbot"
+          git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/$HF_SPACE space_repo
           cd space_repo
           # Copy app and Dockerfile
           cp -r ../app ./app
