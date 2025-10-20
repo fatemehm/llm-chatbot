@@ -175,14 +175,14 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE: ${{ secrets.HF_SPACE }}
         run: |
-          git clone https://huggingface.co/spaces/${HF_SPACE} space_repo
+          git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE} space_repo
           cd space_repo
           # Copy app and Dockerfile
           cp -r ../app ./app
           cp ../Dockerfile .
           git add .
           git commit -m "Update Docker Space"
-          git push https://huggingface:${HF_TOKEN}@huggingface.co/${HF_SPACE} main
+          git push https://huggingface:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE} main
 
       - name: Deployment Summary
         run: |
