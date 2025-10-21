@@ -120,11 +120,13 @@ jobs:
           git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/$HF_SPACE space_repo
           cd space_repo
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
           mkdir -p app config models
-          cp ../app/streamlit_app.py ./app.py
+          cp ../app/streamlit_app.py ./app/streamlit_app.py
           cp ../app/model.py ./app/
           cp ../app/__init__.py ./app/
           cp -r ../config/* ./config/
+
           for model_dir in ../models/*/; do
             model_name=$(basename "$model_dir")
             mkdir -p "models/$model_name"
