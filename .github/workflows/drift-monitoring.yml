@@ -112,29 +112,59 @@ jobs:
         run: |
           huggingface-cli repo create $HF_SPACE --type space --space_sdk docker || echo "Space already exists"
 
-      - name: Prepare Space Repository
+      - name: Clone and Prepare Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE: Mahshidmsy/llm-chatbot
         run: |
           git clone https://huggingface:${HF_TOKEN}@huggingface.co/spaces/$HF_SPACE space_repo
           cd space_repo
-          cp -r ../app ./app
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          mkdir -p app config models
+          cp ../app/streamlit_app_hf.py ./app.py
+          cp ../app/model.py ./app/
+          cp ../app/__init__.py ./app/
+          cp -r ../config/* ./config/
+          for model_dir in ../models/*/; do
+            model_name=$(basename "$model_dir")
+            mkdir -p "models/$model_name"
+            cp "$model_dir"/*.json "models/$model_name/" 2>/dev/null || true
+            cp "$model_dir"/*.safetensors "models/$model_name/" 2>/dev/null || true
+            cp "$model_dir"/*.bin "models/$model_name/" 2>/dev/null || true
+            cp "$model_dir"/tokenizer* "models/$model_name/" 2>/dev/null || true
+          done
           cp ../Dockerfile.streamlit ./Dockerfile
           cp ../requirements.txt ./requirements.txt
-          git add .
-          git commit -m "Deploy Streamlit app - automated via GitHub Actions" || echo "No changes to commit"
-          git push https://huggingface:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE} main
+          cat > README.md << 'EOFREADME'
+          title: LLM Tech Support Chatbot
+          emoji: 🤖
+          colorFrom: blue
+          colorTo: purple
+          sdk: docker
+          pinned: false
+          license: apache-2.0
+          app_port: 8501
+
+          LLM Tech Support Chatbot with Streamlit interface
+          EOFREADME
+          echo "📦 Files to deploy:"
+          ls -la
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Deploy Streamlit app"
+            git push https://huggingface:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE} main --force
+            echo "✅ Successfully pushed to Hugging Face Space"
+          fi
 
       - name: Deployment Summary
         run: |
           echo "## 🚀 Hugging Face Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Streamlit app deployed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Streamlit app deployed!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 **Space URL**: https://huggingface.co/spaces/Mahshidmsy/llm-chatbot" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📝 The app will be available in 1-2 minutes after build completes" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 https://huggingface.co/spaces/Mahshidmsy/llm-chatbot" >> $GITHUB_STEP_SUMMARY
 
   notify:
     name: Notify via Email
@@ -151,16 +181,9 @@ jobs:
           password: ${{ secrets.EMAIL_PASS }}
           to: ${{ secrets.ALERT_EMAIL }}
           from: "ML Pipeline <${{ secrets.EMAIL_USER }}>"
-          subject: >-
-            ${{ needs.deploy-streamlit-to-huggingface.result == 'success' && '✅ Streamlit App Deployed to HF' || '⚠️ Deployment Failed or Skipped' }}
+          subject: "${{ needs.deploy-streamlit-to-huggingface.result == 'success' && '✅ Deployed' || '⚠️ Failed' }}"
           body: |
-            🚀 Deployment Status Report
-
-            Drift Detection: ${{ needs.drift-detection.outputs.drift_detected == '0' && 'No drift' || 'Drift detected' }}
+            Drift: ${{ needs.drift-detection.outputs.drift_detected == '0' && 'No drift' || 'Drift detected' }}
             Deployment: ${{ needs.deploy-streamlit-to-huggingface.result }}
-
-            🔗 Space URL: https://huggingface.co/spaces/Mahshidmsy/llm-chatbot
-            �� Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            ⏱️ The app will be ready in 1-2 minutes after build completes.
+            URL: https://huggingface.co/spaces/Mahshidmsy/llm-chatbot
         continue-on-error: true
