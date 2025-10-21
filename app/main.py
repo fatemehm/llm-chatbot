@@ -28,9 +28,13 @@ def get_model(model_name: str) -> ChatbotModel:
     return model_cache[model_name]
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+@app.get("/")
+async def root():
+    return {
+        "message": "🚀 LLM Chatbot API is running!",
+        "docs": "Visit /docs for the interactive Swagger UI",
+        "health": "Visit /health for health check",
+    }
 
 
 @app.post("/chat")
