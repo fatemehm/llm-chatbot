@@ -142,15 +142,16 @@ jobs:
           git add .gitattributes
 
           cat > README.md << 'EOFREADME'
-          title: LLM Tech Support Chatbot
+          ---
+          title: LLM Chatbot
           emoji: 🤖
-          colorFrom: blue
-          colorTo: purple
-          sdk: docker
+          colorFrom: indigo
+          colorTo: pink
+          sdk: streamlit
+          sdk_version: "1.39.0"
+          app_file: app/streamlit_app.py
           pinned: false
-          license: apache-2.0
-          app_port: 8501
-
+          ---
           LLM Tech Support Chatbot with Streamlit interface
           EOFREADME
           echo "📦 Files to deploy:"
