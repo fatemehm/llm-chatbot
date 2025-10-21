@@ -135,6 +135,12 @@ jobs:
           done
           cp ../Dockerfile.streamlit ./Dockerfile
           cp ../requirements.txt ./requirements.txt
+
+          apt-get update && apt-get install -y git-lfs
+          git lfs install
+          git lfs track "*.safetensors" "*.bin"
+          git add .gitattributes
+
           cat > README.md << 'EOFREADME'
           title: LLM Tech Support Chatbot
           emoji: 🤖
