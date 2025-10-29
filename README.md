@@ -30,7 +30,7 @@ A production-ready technical support chatbot powered by fine-tuned LLMs with LoR
 ### 1. Installation
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/fatemehm/llm-chatbot
 cd llm-chatbot
 
 python -m venv venv
@@ -60,14 +60,14 @@ make run-api
 # Terminal 2: Start UI
 make run-streamlit
 
-# Terminal 3: MLflow UI (optional)
+# Terminal 3: MLflow UI
 make mlflow-ui
 ```
 
 **With Docker:**
 ```bash
 make docker-up
-make docker-logs  # View logs
+make docker-logs 
 ```
 
 ## 🌐 Access Points
@@ -161,7 +161,7 @@ Choose from three models:
 
 ## 📝 API Usage
 
-### cURL Example
+### CURL Example
 
 ```bash
 # Simple request
@@ -280,13 +280,6 @@ make test-coverage
 - Implement Redis for caching
 - Use message queue for async processing
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'Add feature'`)
-4. Push to branch (`git push origin feature/amazing`)
-5. Open Pull Request
 
 ## 📄 License
 
